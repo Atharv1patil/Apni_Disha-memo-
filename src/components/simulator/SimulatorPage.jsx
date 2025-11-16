@@ -1,13 +1,14 @@
-// src/SimulatorPage.js (or your component file)
+// src/SimulatorPage.js
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Mic, Volume2, X, Target, Users, GraduationCap } from "lucide-react"
-import { useTranslation } from 'react-i18next';
+import { useTranslation } from "react-i18next";
 import i18n from '../../i18n' // Import to initialize
 
 /* ----------------------
-   Fixtures
+   Fixtures (unchanged)
    ---------------------- */
 const STREAMS = [
   { id: "arts", label: { en: "Arts", hi: "आर्ट्स", ur: "آرٹس", dogri: "आर्ट्स", gojri: "آرٹس", pahari: "आर्ट्स", mi: "कला" } },
@@ -59,7 +60,7 @@ const SKILLS = [
 
 const UPSKILLS = [
   { id: "cert1", label: { en: "Certification 1", hi: "प्रमाणपत्र 1", ur: "سرٹیفیکیشن 1", dogri: "प्रमाणपत्र 1", gojri: "سرٹیفیکیشن 1", pahari: "प्रमाणपत्र 1", mi: "प्रमाणपत्र १" } },
-  { id: "cert2", label: { en: "Certification 2", hi: "प्रमाणपत्र 2", ur: "سرٹیفیکیشن 2", dogri: "प्रमाणपत्र 2", gojri: "سرٹیفیکیشن 2", pahari: "प्रमाणपत्र 2", mi: "प्रमाणपत्र २" } },
+  { id: "cert2", label: { en: "Certification 2", hi: "प्रमाणपत्र 2", ur: "سرٹیفیکیشن 2", dogri: "प्रमाणपत्र 2", gojri: "سرٹیفیکेशन 2", pahari: "प्रमाणपत्र 2", mi: "प्रमाणपत्र २" } },
 ];
 
 const SCHOLARSHIPS = [
@@ -69,7 +70,7 @@ const SCHOLARSHIPS = [
 const SAMPLE_SCENARIOS = [
   {
     id: "sc1",
-    name: "engineeringGovt", // Use translation key
+    name: "engineeringGovt",
     stream: "science",
     course: "btech",
     collegeType: "govt",
@@ -86,7 +87,7 @@ const SAMPLE_SCENARIOS = [
   },
   {
     id: "sc2",
-    name: "commercePrivate", // Use translation key
+    name: "commercePrivate",
     stream: "commerce",
     course: "bcom",
     collegeType: "private",
@@ -108,9 +109,12 @@ function getLabel(item, lang = "en") {
   return item.label?.[lang] ?? item.label?.en ?? ""
 }
 function currency(x) {
-  return `₹${Number(x).toLocaleString()}`
+  return `₹${Number(x || 0).toLocaleString()}`
 }
 
+/* -----------------------
+   MAIN COMPONENT
+   ----------------------- */
 export default function SimulatorPage() {
   const { t } = useTranslation();
 
@@ -118,6 +122,7 @@ export default function SimulatorPage() {
   const [activeScenarioIndex, setActiveScenarioIndex] = useState(0)
   const active = scenarios[activeScenarioIndex] || SAMPLE_SCENARIOS[0]
 
+  // local UI state (keeps in sync with active scenario)
   const [stream, setStream] = useState(active.stream)
   const [course, setCourse] = useState(active.course)
   const [collegeType, setCollegeType] = useState(active.collegeType)
@@ -129,6 +134,7 @@ export default function SimulatorPage() {
   const [playgroundMode, setPlaygroundMode] = useState(false)
   const [govtFirst, setGovtFirst] = useState(true)
 
+  // voice
   const [voiceConsent, setVoiceConsent] = useState(false)
   const [listening, setListening] = useState(false)
   const [transcripts, setTranscripts] = useState([])
@@ -136,6 +142,7 @@ export default function SimulatorPage() {
   const recognitionRef = useRef(null)
   const synthRef = useRef(typeof window !== "undefined" && window.speechSynthesis ? window.speechSynthesis : null)
 
+  // derived
   const totalPoints = useMemo(
     () => scenarios.reduce((acc, s) => acc + Math.round((s.npv || 0) / 100000), 0),
     [scenarios],
@@ -148,6 +155,38 @@ export default function SimulatorPage() {
     return out
   }, [totalPoints])
 
+  /* Keep local UI state synced when active scenario changes */
+  useEffect(() => {
+    setStream(active?.stream || "")
+    setCourse(active?.course || "")
+    setCollegeType(active?.collegeType || "")
+    setCollege(active?.college || "")
+    setSkills(active?.skills || [])
+    setUpskill(active?.upskill || [])
+    setScholarship(active?.scholarship || "")
+  }, [activeScenarioIndex, scenarios])
+
+  /* When stream changes update course to a sensible default */
+  useEffect(() => {
+    const list = COURSES[stream] || []
+    if (list.length > 0 && !list.find((c) => c.id === course)) {
+      setCourse(list[0].id)
+    } else if (list.length === 0) {
+      setCourse("")
+    }
+  }, [stream])
+
+  /* When collegeType changes pick first college */
+  useEffect(() => {
+    const list = COLLEGES[collegeType] || []
+    if (list.length > 0 && !list.find((c) => c.id === college)) {
+      setCollege(list[0].id)
+    } else if (list.length === 0) {
+      setCollege("")
+    }
+  }, [collegeType])
+
+  /* Voice: setup / teardown SpeechRecognition */
   useEffect(() => {
     if (!voiceConsent) {
       if (recognitionRef.current) {
@@ -218,9 +257,7 @@ export default function SimulatorPage() {
       return
     }
     if (listening) {
-      try {
-        rec.stop()
-      } catch { }
+      try { rec.stop() } catch { }
       setListening(false)
     } else {
       try {
@@ -233,6 +270,7 @@ export default function SimulatorPage() {
     }
   }
 
+  /* TTS */
   const playTts = (text) => {
     if (!text || typeof text !== "string") return
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -260,53 +298,25 @@ export default function SimulatorPage() {
     }
   }
 
+  /* Export summary (unchanged, but robust) */
   const exportSummary = () => {
     const summary = scenarios
       .map((s, i) => {
         return `${t('scenario')} ${i + 1}:
-  Name: ${s.name || `${t('scenario')} ${i + 1}`}
-  Stream: ${getLabel(
-          STREAMS.find((st) => st.id === s.stream),
-          i18n.language,
-        )}
-  Course: ${getLabel(
-          (COURSES[s.stream] || []).find((c) => c.id === s.course),
-          i18n.language,
-        )}
-  College Type: ${getLabel(
-          COLLEGE_TYPES.find((ct) => ct.id === s.collegeType),
-          i18n.language,
-        )}
-  College: ${getLabel(
-          (COLLEGES[s.collegeType] || []).find((cl) => cl.id === s.college),
-          i18n.language,
-        )}
-  Skills: ${(s.skills || [])
-            .map((sk) =>
-              getLabel(
-                SKILLS.find((skl) => skl.id === sk),
-                i18n.language,
-              ),
-            )
-            .join(", ")}
-  Upskill: ${(s.upskill || [])
-            .map((u) =>
-              getLabel(
-                UPSKILLS.find((up) => up.id === u),
-                i18n.language,
-              ),
-            )
-            .join(", ")}
-  Scholarship: ${getLabel(
-              SCHOLARSHIPS.find((sch) => sch.id === s.scholarship),
-              i18n.language,
-            )}
-  NPV: ${s.npv ? currency(s.npv) : "-"}
-  ROI: ${s.roi ?? "-"}
-  Employment Probability: ${s.employmentProb ? `${(s.employmentProb * 100).toFixed(1)}%` : "-"}
-  Starting Salary: ${s.startingSalary ? currency(s.startingSalary) : "-"}
-  Time to Job: ${s.timeToJob ?? "-"} ${t('months')}
-  Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}%` : "-"}
+Name: ${s.name || `${t('scenario')} ${i + 1}`}
+Stream: ${getLabel(STREAMS.find((st) => st.id === s.stream), i18n.language)}
+Course: ${getLabel((COURSES[s.stream] || []).find((c) => c.id === s.course), i18n.language)}
+College Type: ${getLabel(COLLEGE_TYPES.find((ct) => ct.id === s.collegeType), i18n.language)}
+College: ${getLabel((COLLEGES[s.collegeType] || []).find((cl) => cl.id === s.college), i18n.language)}
+Skills: ${(s.skills || []).map((sk) => getLabel(SKILLS.find((skl) => skl.id === sk), i18n.language)).join(", ")}
+Upskill: ${(s.upskill || []).map((u) => getLabel(UPSKILLS.find((up) => up.id === u), i18n.language)).join(", ")}
+Scholarship: ${getLabel(SCHOLARSHIPS.find((sch) => sch.id === s.scholarship), i18n.language)}
+NPV: ${s.npv ? currency(s.npv) : "-"}
+ROI: ${s.roi ?? "-"}
+Employment Probability: ${s.employmentProb ? `${(s.employmentProb * 100).toFixed(1)}%` : "-"}
+Starting Salary: ${s.startingSalary ? currency(s.startingSalary) : "-"}
+Time to Job: ${s.timeToJob ?? "-"} ${t('months')}
+Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}%` : "-"}
 `
       })
       .join("\n\n---\n\n")
@@ -326,9 +336,11 @@ export default function SimulatorPage() {
     }
   }
 
+  /* Small helpers */
   const toggleSkill = (id) => setSkills((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   const toggleUpskill = (id) => setUpskill((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
 
+  /* Playground auto-experiment - same behavior but with small UI tweak */
   const autoExperiment = () => {
     setScenarios((prevScenarios) => {
       if (prevScenarios.length === 0) return prevScenarios
@@ -386,26 +398,41 @@ export default function SimulatorPage() {
     { code: "pahari", name: "पहाड़ी" },
   ]
 
+  /* Apply local edits back to scenarios (Save changes to active scenario) */
+  const saveActiveChanges = () => {
+    setScenarios((prev) => {
+      const copy = [...prev]
+      const s = { ...(copy[activeScenarioIndex] || {}) }
+      s.stream = stream
+      s.course = course
+      s.collegeType = collegeType
+      s.college = college
+      s.skills = skills
+      s.upskill = upskill
+      s.scholarship = scholarship
+      copy[activeScenarioIndex] = s
+      return copy
+    })
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-white to-indigo-100 text-gray-900 font-sans selection:bg-indigo-300 selection:text-white">
       {/* HERO */}
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <div className="rounded-3xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 p-8 shadow-2xl flex flex-col md:flex-row md:items-center md:justify-between gap-6 text-white">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight drop-shadow-lg">{t('title')}</h1>
-            <p className="mt-3 text-lg max-w-3xl drop-shadow-sm">{t('subtitle')}</p>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        <div className="rounded-3xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 p-6 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6 text-white">
+          <div className="max-w-2xl">
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-lg leading-tight">{t('title')}</h1>
+            <p className="mt-2 text-base md:text-lg opacity-95">{t('subtitle')}</p>
 
-            <div className="mt-6 flex flex-wrap gap-4 items-center">
+            <div className="mt-4 flex flex-wrap gap-3 items-center">
               <select
                 value={i18n.language}
                 onChange={(e) => i18n.changeLanguage(e.target.value)}
-                className="px-4 py-2 border border-white border-opacity-50 rounded-lg text-sm font-medium bg-transparent text-white hover:bg-white hover:bg-opacity-20 transition focus:outline-none focus:ring-2 focus:ring-white"
+                className="px-3 py-2 rounded-lg text-sm bg-white/10 text-white border border-white/20 focus:outline-none"
                 aria-label="Select language"
               >
                 {languages.map(({ code, name }) => (
-                  <option key={code} value={code} className="text-black">
-                    {name}
-                  </option>
+                  <option key={code} value={code} className="text-black">{name}</option>
                 ))}
               </select>
 
@@ -418,21 +445,36 @@ export default function SimulatorPage() {
                 />
                 <span className="text-white font-semibold">{t('governmentFirst')}</span>
               </label>
+
+              <button
+                onClick={autoExperiment}
+                className="ml-2 inline-flex items-center gap-2 bg-white text-indigo-700 px-3 py-2 rounded-lg font-semibold shadow-sm hover:shadow-md"
+                title="Auto experiment"
+              >
+                <Target className="w-4 h-4" />
+                {t('autoExperiment')}
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6">
             <div className="text-right">
               <div className="text-sm opacity-80">{t('totalScenarios')}</div>
-              <div className="text-3xl font-extrabold">{scenarios.length}</div>
+              <div className="text-2xl md:text-3xl font-extrabold">{scenarios.length}</div>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-xl px-6 py-3 shadow-lg flex items-center gap-4">
-              <Target className="w-8 h-8 text-white" />
+
+            <motion.div
+              initial={{ scale: 0.98 }}
+              animate={playgroundMode ? { scale: [1, 1.03, 1] } : { scale: 1 }}
+              transition={{ duration: 1.2 }}
+              className="bg-white bg-opacity-20 rounded-xl px-5 py-3 flex items-center gap-4"
+            >
+              <Target className="w-7 h-7 text-white" />
               <div>
                 <div className="text-xs opacity-80">{t('engagement')}</div>
-                <div className="font-semibold text-lg">{t('high')}</div>
+                <div className="font-semibold">{t('high')}</div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </div>
@@ -440,11 +482,12 @@ export default function SimulatorPage() {
       {/* GRID LAYOUT */}
       <div className="max-w-7xl mx-auto px-6 pb-40 grid grid-cols-1 md:grid-cols-12 gap-8">
         {/* LEFT: Controls */}
-        <aside className="md:col-span-3 bg-white rounded-3xl p-8 shadow-xl sticky top-24 h-fit border border-indigo-200">
-          <h3 className="text-xl font-semibold mb-6 text-indigo-700">
+        <aside className="md:col-span-3 bg-white rounded-3xl p-6 shadow-xl sticky top-24 border border-indigo-100">
+          <h3 className="text-lg font-semibold mb-4 text-indigo-700">
             {t('stream')} & {t('course')}
           </h3>
-          <div className="space-y-5">
+
+          <div className="space-y-4">
             <Select label={t('stream')} value={stream} options={STREAMS} lang={i18n.language} onChange={setStream} />
             <Select
               label={t('course')}
@@ -471,16 +514,16 @@ export default function SimulatorPage() {
             />
           </div>
 
-          <hr className="my-6 border-indigo-200" />
+          <hr className="my-5 border-indigo-100" />
 
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-indigo-700">{t('skills')}</h4>
               <button onClick={() => setSkills([])} className="text-sm text-indigo-500 hover:underline">
                 {t('clear')}
               </button>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2">
               {SKILLS.map((s) => (
                 <Chip key={s.id} active={skills.includes(s.id)} onClick={() => toggleSkill(s.id)}>
                   {getLabel(s, i18n.language)}
@@ -489,14 +532,14 @@ export default function SimulatorPage() {
             </div>
           </div>
 
-          <div className="mt-6">
-            <div className="flex items-center justify-between mb-3">
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-indigo-700">{t('upskill')}</h4>
               <button onClick={() => setUpskill([])} className="text-sm text-indigo-500 hover:underline">
                 {t('clear')}
               </button>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2">
               {UPSKILLS.map((u) => (
                 <Chip key={u.id} active={upskill.includes(u.id)} onClick={() => toggleUpskill(u.id)}>
                   {getLabel(u, i18n.language)}
@@ -505,23 +548,21 @@ export default function SimulatorPage() {
             </div>
           </div>
 
-          <div className="mt-6">
-            <label className="block mb-3 font-semibold text-indigo-700">{t('scholarships')}</label>
+          <div className="mt-4">
+            <label className="block mb-2 font-semibold text-indigo-700">{t('scholarships')}</label>
             <select
               value={scholarship}
               onChange={(e) => setScholarship(e.target.value)}
-              className="w-full rounded-xl p-3 border border-indigo-300 shadow-sm"
+              className="w-full rounded-lg p-3 border border-indigo-100 focus:outline-none"
             >
-              <option value="">{`-- ${t('scholarships')} --`}</option>
+              <option value="">{`-- ${t('select')} --`}</option>
               {SCHOLARSHIPS.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {getLabel(s, i18n.language)}
-                </option>
+                <option key={s.id} value={s.id}>{getLabel(s, i18n.language)}</option>
               ))}
             </select>
           </div>
 
-          <div className="mt-8 flex gap-3">
+          <div className="mt-6 flex gap-3">
             <button
               onClick={() => {
                 const copy = [...scenarios]
@@ -529,7 +570,7 @@ export default function SimulatorPage() {
                 setScenarios(copy)
                 setActiveScenarioIndex(copy.length - 1)
               }}
-              className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl py-3 font-semibold shadow-lg"
+              className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl py-3 font-semibold shadow"
             >
               + {t('addScenario')}
             </button>
@@ -543,25 +584,28 @@ export default function SimulatorPage() {
                 setUpskill([])
                 setScholarship("")
               }}
-              className="px-5 py-3 border border-indigo-300 rounded-2xl text-indigo-700"
+              className="px-4 py-3 border border-indigo-100 rounded-2xl text-indigo-700"
             >
               {t('reset')}
             </button>
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <button onClick={saveActiveChanges} className="flex-1 bg-white border border-indigo-100 rounded-full py-2 text-indigo-700">Save</button>
+            <button onClick={exportSummary} className="px-4 py-2 bg-indigo-50 rounded-full">Export</button>
           </div>
         </aside>
 
         {/* CENTER: Visualizer */}
         <main className="md:col-span-6">
-          <div className="bg-white rounded-3xl p-8 shadow-2xl min-h-[480px] border border-indigo-200">
+          <div className="bg-white rounded-3xl p-6 shadow-xl min-h-[520px] border border-indigo-100">
             <div className="flex items-start justify-between">
               <div>
-                <h2 className="text-2xl font-extrabold text-indigo-700">
-                  {t(active?.name || `scenario${activeScenarioIndex + 1}`)}
-                </h2>
-                <p className="text-sm text-indigo-400 mt-1 font-medium tracking-wide">{t('interactiveVisualizer')}</p>
+                <h2 className="text-xl font-extrabold text-indigo-700">{t(active?.name || `scenario${activeScenarioIndex + 1}`)}</h2>
+                <p className="text-sm text-indigo-400 mt-1">{t('interactiveVisualizer')}</p>
               </div>
 
-              <div className="flex items-center gap-5">
+              <div className="flex items-center gap-3">
                 <StatPill
                   icon={<GraduationCap className="w-5 h-5 text-indigo-600" />}
                   label={t('roi')}
@@ -575,62 +619,48 @@ export default function SimulatorPage() {
               </div>
             </div>
 
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="col-span-1 rounded-2xl border-2 border-dashed border-indigo-300 h-72 flex items-center justify-center bg-gradient-to-b from-indigo-50 to-indigo-100 shadow-inner">
-                <div className="text-center text-indigo-300 select-none">
-                  <div className="text-2xl font-semibold tracking-wide">{t('sankeyFlow')}</div>
-                  <div className="mt-3 text-base">{t('visualizeCourse')}</div>
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="rounded-2xl border-2 border-dashed border-indigo-200 h-72 flex items-center justify-center bg-gradient-to-b from-indigo-50 to-indigo-100">
+                <div className="text-center text-indigo-400 select-none">
+                  <div className="text-xl font-semibold tracking-wide">{t('sankeyFlow')}</div>
+                  <div className="mt-2 text-sm">{t('visualizeCourse')}</div>
                 </div>
               </div>
 
-              <div className="col-span-1 space-y-5">
-                <div className="rounded-2xl p-6 border border-indigo-200 shadow-md bg-white">
+              <div className="space-y-4">
+                <div className="rounded-2xl p-5 border border-indigo-100 shadow-sm bg-white">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm text-indigo-500 font-semibold tracking-wide">{t('startingSalary')}</div>
-                      <div className="text-3xl font-extrabold text-indigo-700">
-                        {currency(active?.startingSalary || 0)}
-                      </div>
+                      <div className="text-xs text-indigo-500 font-semibold">{t('startingSalary')}</div>
+                      <div className="text-2xl font-extrabold text-indigo-700">{currency(active?.startingSalary || 0)}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-sm text-indigo-500 font-semibold tracking-wide">{t('timeToJob')}</div>
-                      <div className="text-xl font-semibold text-indigo-700">
-                        {active?.timeToJob} {t('months')}
-                      </div>
+                      <div className="text-xs text-indigo-500 font-semibold">{t('timeToJob')}</div>
+                      <div className="text-xl font-semibold text-indigo-700">{active?.timeToJob} {t('months')}</div>
                     </div>
                   </div>
-                  <div className="mt-4 text-xs text-indigo-400 italic">{t('includesScholarship')}</div>
+                  <div className="mt-3 text-xs text-indigo-400 italic">{t('includesScholarship')}</div>
                 </div>
 
-                <div className="rounded-2xl p-4 border border-indigo-300 bg-indigo-50 shadow-inner">
+                <div className="rounded-2xl p-4 border border-indigo-100 bg-indigo-50">
                   <div className="flex items-center justify-between">
                     <div className="text-sm font-semibold text-indigo-700">{t('scholarshipOdds')}</div>
                     <div className="font-bold text-indigo-700">{Math.round((active?.scholarshipOdds || 0) * 100)}%</div>
                   </div>
-                  <div className="mt-3 h-4 bg-indigo-200 rounded-full overflow-hidden shadow-inner">
-                    <div
-                      style={{ width: `${Math.round((active?.scholarshipOdds || 0) * 100)}%` }}
-                      className="h-full bg-gradient-to-r from-indigo-600 to-purple-600 transition-all"
-                    />
+                  <div className="mt-3 h-4 bg-indigo-200 rounded-full overflow-hidden">
+                    <div style={{ width: `${Math.round((active?.scholarshipOdds || 0) * 100)}%` }} className="h-full bg-gradient-to-r from-indigo-600 to-purple-600 transition-all" />
                   </div>
                 </div>
 
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => playTts(`${active?.name || t('scenario')}: ${t('roi')} ${active?.roi ?? "N/A"}`)}
-                    className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-2xl"
-                  >
-                    {t('explainVoice')}
-                  </button>
-                  <button onClick={() => exportSummary()} className="flex-1 border border-indigo-300 rounded-2xl py-3">
-                    {t('export')}
-                  </button>
+                <div className="flex gap-3">
+                  <button onClick={() => playTts(`${t(active?.name || 'scenario')}: ${t('roi')} ${active?.roi ?? "N/A"}`)} className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-2xl hover:scale-[1.01] transition"> {t('explainVoice')}</button>
+                  <button onClick={() => exportSummary()} className="flex-1 border border-indigo-100 rounded-2xl py-3"> {t('export')}</button>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8">
-              <label className="block mb-3 font-semibold text-indigo-700">{t('sensitivityLens')}</label>
+            <div className="mt-6">
+              <label className="block mb-2 font-semibold text-indigo-700">{t('sensitivityLens')}</label>
               <input
                 type="range"
                 min={-1}
@@ -638,72 +668,60 @@ export default function SimulatorPage() {
                 step={0.01}
                 value={sensitivity}
                 onChange={(e) => setSensitivity(Number.parseFloat(e.target.value))}
-                className="w-full h-3 rounded-lg bg-gradient-to-r from-indigo-400 via-purple-500 to-pink-500"
+                className="w-full h-3 rounded-lg accent-indigo-600"
+                aria-label={t('sensitivityLens')}
               />
+            </div>
+          </div>
+
+          {/* Scenario list / small pager */}
+          <div className="mt-4 flex gap-2 items-center">
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {scenarios.map((s, idx) => (
+                <button key={s.id || idx} onClick={() => setActiveScenarioIndex(idx)} className={`px-3 py-2 rounded-full text-sm ${idx === activeScenarioIndex ? "bg-indigo-600 text-white" : "bg-white border border-indigo-100"}`}>
+                  {s.name || `${t('scenario')} ${idx + 1}`}
+                </button>
+              ))}
+            </div>
+            <div className="ml-auto flex gap-2">
+              <button onClick={() => setScenarios((prev) => prev.slice(0, -1))} className="px-3 py-2 bg-white border rounded-md">Delete</button>
+              <button onClick={() => setScenarios((prev) => { const c = [...prev]; c.push({...c[activeScenarioIndex]}); return c })} className="px-3 py-2 bg-white border rounded-md">Duplicate</button>
             </div>
           </div>
         </main>
 
         {/* RIGHT: Summary rail */}
         <aside className="md:col-span-3">
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 shadow-2xl sticky top-24 border border-indigo-200">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xl font-semibold text-indigo-700">{t('summary')}</h4>
-              <div className="text-indigo-600 font-semibold text-lg">
-                {t('points')}: {totalPoints}
-              </div>
+          <div className="bg-white rounded-3xl p-6 shadow-xl sticky top-24 border border-indigo-100">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-lg font-semibold text-indigo-700">{t('summary')}</h4>
+              <div className="text-indigo-600 font-semibold">{t('points')}: {totalPoints}</div>
             </div>
 
-            <div className="mt-6 space-y-5">
+            <div className="space-y-4">
               <SummaryCard title={t('npv')} value={currency(active?.npv || 0)} hint={t('netPresentValue')} />
               <SummaryCard title={t('roi')} value={(active?.roi || 0).toFixed(2)} hint={t('returnOnInvestment')} />
-              <SummaryCard
-                title={t('employ')}
-                value={`${((active?.employmentProb || 0) * 100).toFixed(1)}%`}
-                hint={t('employmentProbability')}
-              />
-              <SummaryCard
-                title={t('startingSalary').split(" ")[0]}
-                value={currency(active?.startingSalary || 0)}
-                hint={t('averageStartingSalary')}
-              />
-              <SummaryCard
-                title={t('timeToJob')}
-                value={`${active?.timeToJob} ${t('months')}`}
-                hint={t('typicalTimeToEmployment')}
-              />
+              <SummaryCard title={t('employ')} value={`${((active?.employmentProb || 0) * 100).toFixed(1)}%`} hint={t('employmentProbability')} />
+              <SummaryCard title={t('startingSalary').split(" ")[0]} value={currency(active?.startingSalary || 0)} hint={t('averageStartingSalary')} />
+              <SummaryCard title={t('timeToJob')} value={`${active?.timeToJob} ${t('months')}`} hint={t('typicalTimeToEmployment')} />
             </div>
 
-            <div className="mt-8">
-              <h5 className="text-base font-semibold mb-3 text-indigo-700">{t('badges_1')}</h5>
-              <div className="flex flex-wrap gap-3">
-                {badges.length === 0 ? (
-                  <div className="text-indigo-400 italic select-none">{t('noBadgesYet')}</div>
-                ) : (
-                  badges.map((b) => <Badge key={b}>{b}</Badge>)
-                )}
+            <div className="mt-6">
+              <h5 className="text-sm font-semibold mb-2 text-indigo-700">{t('badges_1')}</h5>
+              <div className="flex flex-wrap gap-2">
+                {badges.length === 0 ? <div className="text-indigo-400 italic">{t('noBadgesYet')}</div> : badges.map(b => <Badge key={b}>{b}</Badge>)}
               </div>
             </div>
 
-            <div className="mt-8 flex gap-4">
-              <button
-                onClick={() => alert("Share to parents (mock)")}
-                className="flex-1 bg-gradient-to-r from-pink-500 to-yellow-400 text-white py-3 rounded-3xl"
-              >
-                {t('share')}
-              </button>
-              <button
-                onClick={() => alert("Save scenario (mock)")}
-                className="flex-1 border border-indigo-300 py-3 rounded-3xl text-indigo-700"
-              >
-                {t('save')}
-              </button>
+            <div className="mt-6 flex gap-3">
+              <button onClick={() => alert("Share to parents (mock)")} className="flex-1 bg-gradient-to-r from-pink-500 to-yellow-400 text-white py-2 rounded-xl"> {t('share')}</button>
+              <button onClick={() => alert("Save scenario (mock)")} className="flex-1 border border-indigo-100 py-2 rounded-xl text-indigo-700"> {t('save')}</button>
             </div>
           </div>
         </aside>
       </div>
 
-      {/* COLLAPSIBLE VOICE DOCK: FAB + Expandable Panel */}
+      {/* VOICE DOCK */}
       <VoiceDock
         lang={i18n.language}
         setLang={i18n.changeLanguage}
@@ -716,6 +734,7 @@ export default function SimulatorPage() {
         expanded={dockExpanded}
         setExpanded={setDockExpanded}
         t={t}
+        clearTranscripts={() => setTranscripts([])}
       />
     </div>
   )
@@ -724,6 +743,7 @@ export default function SimulatorPage() {
 /* -------------------------------
    PRESENTATIONAL SMALL COMPONENTS
    ------------------------------- */
+
 function Select({ label, value, onChange, options = [], disabled = false, lang = "en" }) {
   return (
     <label className="block">
@@ -732,13 +752,12 @@ function Select({ label, value, onChange, options = [], disabled = false, lang =
         value={value || ""}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full rounded-xl p-3 border border-indigo-300 shadow-sm focus:outline-none"
+        className="w-full rounded-xl p-3 border border-indigo-100 shadow-sm focus:outline-none"
+        aria-label={label}
       >
         <option value="">{`-- ${label} --`}</option>
         {options.map((opt) => (
-          <option key={opt.id} value={opt.id}>
-            {getLabel(opt, lang)}
-          </option>
+          <option key={opt.id} value={opt.id}>{getLabel(opt, lang)}</option>
         ))}
       </select>
     </label>
@@ -749,7 +768,7 @@ function Chip({ children, active = false, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-1 rounded-full text-sm font-semibold border transition ${active ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white" : "bg-white border-indigo-300 text-indigo-700"}`}
+      className={`px-3 py-1 rounded-full text-sm font-semibold border transition ${active ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md" : "bg-white border-indigo-100 text-indigo-700"}`}
       aria-pressed={active}
     >
       {children}
@@ -759,8 +778,8 @@ function Chip({ children, active = false, onClick }) {
 
 function StatPill({ icon, label, value }) {
   return (
-    <div className="bg-white/90 border border-indigo-200 rounded-xl px-4 py-3 shadow-md flex items-center gap-4 min-w-[110px]">
-      <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">{icon}</div>
+    <div className="bg-white border border-indigo-100 rounded-xl px-3 py-2 shadow-sm flex items-center gap-3 min-w-[92px]">
+      <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">{icon}</div>
       <div className="text-right">
         <div className="text-xs text-indigo-500 font-semibold">{label}</div>
         <div className="font-bold text-indigo-700 text-lg">{value}</div>
@@ -771,19 +790,19 @@ function StatPill({ icon, label, value }) {
 
 function SummaryCard({ title, value, hint }) {
   return (
-    <div className="border border-indigo-200 rounded-2xl p-5 bg-white shadow-md hover:shadow-lg transition cursor-default">
-      <div className="flex items-center justify-between gap-x-5">
+    <div className="border border-indigo-100 rounded-2xl p-4 bg-white shadow-sm hover:shadow-md transition">
+      <div className="flex items-center justify-between">
         <div className="text-sm font-semibold text-indigo-700">{title}</div>
         <div className="text-xs text-indigo-400 italic">{hint}</div>
       </div>
-      <div className="mt-3 text-2xl font-extrabold text-indigo-900">{value}</div>
+      <div className="mt-3 text-xl font-extrabold text-indigo-900">{value}</div>
     </div>
   )
 }
 
 function Badge({ children }) {
   return (
-    <span className="bg-gradient-to-r from-pink-500 to-yellow-400 text-white px-4 py-1 rounded-full text-xs font-semibold shadow-md">
+    <span className="inline-flex items-center bg-gradient-to-r from-pink-500 to-yellow-400 text-white px-3 py-1 rounded-full text-xs font-semibold shadow-sm">
       {children}
     </span>
   )
@@ -804,6 +823,7 @@ function VoiceDock({
   expanded,
   setExpanded,
   t,
+  clearTranscripts,
 }) {
   useEffect(() => {
     const onKey = (e) => {
@@ -813,7 +833,7 @@ function VoiceDock({
     return () => window.removeEventListener("keydown", onKey)
   }, [expanded, setExpanded])
 
-  const panelWidthClass = "w-full max-w-md md:max-w-sm lg:max-w-lg"
+  const panelWidthClass = "w-full max-w-md md:max-w-sm lg:max-w-md"
 
   return (
     <>
@@ -829,156 +849,102 @@ function VoiceDock({
         </button>
       </div>
 
-      {expanded && (
-        <>
-          <div
-            onClick={() => setExpanded(false)}
-            className="fixed inset-0 bg-black bg-opacity-30 z-40 md:hidden"
-            aria-hidden="true"
-          />
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            className={`fixed z-50 inset-0 flex items-end md:items-center justify-center md:justify-end p-4`}
-          >
-            <div
-              className={`${panelWidthClass} bg-white rounded-3xl shadow-2xl border border-indigo-200 overflow-hidden z-50 transform transition-all`}
-            >
-              <div className="flex items-center justify-between p-4 border-b border-neutral-100">
-                <div className="flex items-center gap-3">
-                  <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-2 rounded-full text-white">
-                    <Mic className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="font-semibold text-indigo-700">{t('voiceAssistant')}</div>
-                    <div className="text-xs text-neutral-500">{t('tryCommands')}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const currentIndex = languages.findIndex((l) => l.code === lang)
-                      const nextIndex = (currentIndex + 1) % languages.length
-                      setLang(languages[nextIndex].code)
-                    }}
-                    className="text-xs px-3 py-1 border rounded-lg text-indigo-700"
-                  >
-                    {lang === "en" ? "हिंदी" : "EN"} // Adjust as needed
-                  </button>
-                  <button
-                    onClick={() => setExpanded(false)}
-                    className="p-2 rounded-md text-neutral-600 hover:bg-neutral-100"
-                    aria-label={t('close')}
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 space-y-3 max-h-[60vh] md:max-h-[70vh] overflow-auto">
-                {!voiceConsent ? (
-                  <div className="p-4 bg-indigo-50 rounded-lg text-center">
-                    <p className="text-sm text-indigo-700 mb-3">{t('consentMic')}</p>
-                    <div className="flex gap-3 justify-center">
-                      <button
-                        onClick={() => setVoiceConsent(true)}
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg"
-                      >
-                        {t('consentAccept')}
-                      </button>
-                      <button onClick={() => setVoiceConsent(false)} className="px-4 py-2 border rounded-lg">
-                        {t('consentDecline')}
-                      </button>
+      <AnimatePresence>
+        {expanded && (
+          <>
+            <div onClick={() => setExpanded(false)} className="fixed inset-0 bg-black bg-opacity-30 z-40" aria-hidden="true" />
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.16 }} className={`fixed z-50 inset-0 flex items-end md:items-center justify-center md:justify-end p-4`}>
+              <div className={`${panelWidthClass} bg-white rounded-3xl shadow-2xl border border-indigo-100 overflow-hidden`}>
+                <div className="flex items-center justify-between p-4 border-b border-neutral-100">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-2 rounded-full text-white"><Mic className="w-5 h-5" /></div>
+                    <div>
+                      <div className="font-semibold text-indigo-700">{t('voiceAssistant')}</div>
+                      <div className="text-xs text-neutral-500">{t('tryCommands')}</div>
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-start gap-3">
-                      <MicButton active={listening} onClick={toggleListening} />
-                      <div className="flex-1">
-                        <div className="text-xs text-neutral-500 mb-2 font-mono">
-                          {t('listening')}:{" "}
-                          <span className={listening ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>
-                            {listening ? t('on') : t('off')}
-                          </span>
-                        </div>
-                        <div className="h-36 overflow-auto bg-neutral-50 rounded-lg p-3 text-xs font-mono text-neutral-800">
-                          {transcripts.length === 0 ? (
-                            <div className="text-neutral-400 italic">{t('noTranscriptsYet')}</div>
-                          ) : (
-                            transcripts.map((tr, i) => (
-                              <div key={i} className="mb-1 break-words">
-                                {tr}
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                      <button onClick={() => playTts(transcripts.join(" "))} className="p-3 bg-indigo-50 rounded-md">
-                        <Volume2 className="w-5 h-5 text-indigo-600" />
-                      </button>
-                    </div>
 
-                    <div className="mt-2 text-xs text-neutral-600">
-                      <div className="font-semibold mb-1">{t('suggestedCommands')}</div>
-                      <div className="flex gap-2 flex-wrap">
-                        <CommandChip
-                          onClick={() => {
-                            alert("Compare (mock)")
-                            setExpanded(false)
-                          }}
-                        >
-                          {t('compare')}
-                        </CommandChip>
-                        <CommandChip
-                          onClick={() => {
-                            alert("Explain ROI (mock)")
-                            setExpanded(false)
-                          }}
-                        >
-                          {t('roi')} {lang === "hi" ? "समझाएं" : "Explain"} // Adjust for lang
-                        </CommandChip>
-                        <CommandChip
-                          onClick={() => {
-                            alert("Show scholarships (mock)")
-                            setExpanded(false)
-                          }}
-                        >
-                          {t('scholarships')}
-                        </CommandChip>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => {
+                      const currentIndex = languagesList.findIndex((l) => l.code === lang)
+                      const nextIndex = (currentIndex + 1) % languagesList.length
+                      setLang(languagesList[nextIndex].code)
+                    }} className="text-xs px-3 py-1 border rounded-lg text-indigo-700">
+                      {lang === "en" ? "हिंदी" : "EN"}
+                    </button>
+
+                    <button onClick={() => setExpanded(false)} className="p-2 rounded-md text-neutral-600 hover:bg-neutral-100" aria-label={t('close')}>
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 space-y-3 max-h-[60vh] overflow-auto">
+                  {!voiceConsent ? (
+                    <div className="p-4 bg-indigo-50 rounded-lg text-center">
+                      <p className="text-sm text-indigo-700 mb-3">{t('consentMic')}</p>
+                      <div className="flex gap-3 justify-center">
+                        <button onClick={() => setVoiceConsent(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg">{t('consentAccept')}</button>
+                        <button onClick={() => setVoiceConsent(false)} className="px-4 py-2 border rounded-lg">{t('consentDecline')}</button>
                       </div>
                     </div>
-                  </>
-                )}
-              </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-3">
+                        <MicButton active={listening} onClick={toggleListening} />
+                        <div className="flex-1">
+                          <div className="text-xs text-neutral-500 mb-2 font-mono">
+                            {t('listening')}: <span className={listening ? "text-green-600 font-semibold" : "text-red-500 font-semibold"}>{listening ? t('on') : t('off')}</span>
+                          </div>
+                          <div className="h-36 overflow-auto bg-neutral-50 rounded-lg p-3 text-xs font-mono text-neutral-800">
+                            {transcripts.length === 0 ? <div className="text-neutral-400 italic">{t('noTranscriptsYet')}</div> : transcripts.map((tr, i) => <div key={i} className="mb-1 break-words">{tr}</div>)}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <button onClick={() => playTts(transcripts.join(" "))} className="p-2 bg-indigo-50 rounded-md">
+                            <Volume2 className="w-5 h-5 text-indigo-600" />
+                          </button>
+                          <button onClick={() => clearTranscripts()} className="p-2 bg-neutral-50 rounded-md" title="Clear transcripts">Clear</button>
+                        </div>
+                      </div>
 
-              <div className="p-4 border-t flex items-center justify-between">
-                <div className="text-sm text-neutral-500">{t('voiceAssistant')}</div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard?.writeText(transcripts.join("\n"))
-                    }}
-                    className="text-sm px-3 py-2 border rounded-lg"
-                  >
-                    {t('copy')}
-                  </button>
-                  <button
-                    onClick={() => setExpanded(false)}
-                    className="text-sm px-3 py-2 rounded-lg bg-indigo-600 text-white"
-                  >
-                    {t('done')}
-                  </button>
+                      <div className="mt-2 text-xs text-neutral-600">
+                        <div className="font-semibold mb-1">{t('suggestedCommands')}</div>
+                        <div className="flex gap-2 flex-wrap">
+                          <CommandChip onClick={() => { alert("Compare (mock)"); setExpanded(false) }}>{t('compare')}</CommandChip>
+                          <CommandChip onClick={() => { alert("Explain ROI (mock)"); setExpanded(false) }}>{t('roi')} {lang === "hi" ? "समझाएं" : "Explain"}</CommandChip>
+                          <CommandChip onClick={() => { alert("Show scholarships (mock)"); setExpanded(false) }}>{t('scholarships')}</CommandChip>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="p-4 border-t flex items-center justify-between">
+                  <div className="text-sm text-neutral-500">{t('voiceAssistant')}</div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => navigator.clipboard?.writeText(transcripts.join("\n"))} className="text-sm px-3 py-2 border rounded-lg">{t('copy')}</button>
+                    <button onClick={() => setExpanded(false)} className="text-sm px-3 py-2 rounded-lg bg-indigo-600 text-white">{t('done')}</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </>
-      )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </>
   )
 }
+
+/* small helpers & local lists used in VoiceDock */
+const languagesList = [
+  { code: "en", name: "English" },
+  { code: "hi", name: "हिंदी" },
+  { code: "ur", name: "اردو" },
+  { code: "dogri", name: "डोगरी" },
+  { code: "gojri", name: "गोजरी" },
+  { code: "pahari", name: "पहाड़ी" },
+]
 
 function MicButton({ active = false, onClick }) {
   return (
@@ -995,11 +961,6 @@ function MicButton({ active = false, onClick }) {
 
 function CommandChip({ children, onClick }) {
   return (
-    <button
-      onClick={onClick}
-      className="px-3 py-1 text-xs font-semibold border rounded-full bg-neutral-100 hover:bg-neutral-200"
-    >
-      {children}
-    </button>
+    <button onClick={onClick} className="px-3 py-1 text-xs font-semibold border rounded-full bg-neutral-100 hover:bg-neutral-200">{children}</button>
   )
 }
