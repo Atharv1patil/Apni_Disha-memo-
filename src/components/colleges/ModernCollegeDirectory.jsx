@@ -1,150 +1,331 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Input } from '../ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { 
-  Search, MapPin, Star, Users, Heart, IndianRupee, GraduationCap, Award, Loader2, SlidersHorizontal, X
-} from 'lucide-react';
-import { collegesAPI, bookmarksAPI } from '../../services/api';
-import { toast } from 'sonner';
-import debounce from 'lodash.debounce';
+// src/components/ModernCollegeDirectory.jsx
+import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import axios from "axios";
 
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Input } from "../ui/input";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+
+import {
+  Search,
+  MapPin,
+  Star,
+  Users,
+  IndianRupee,
+  GraduationCap,
+  Award,
+  Loader2,
+  SlidersHorizontal,
+  X,
+  Heart,
+} from "lucide-react";
+
+import debounce from "lodash.debounce";
+
+// -------------------------------
+// API CONFIG
+// -------------------------------
+const API = axios.create({
+  baseURL: "http://127.0.0.1:5000/api",
+  withCredentials: false,
+  headers: { "Content-Type": "application/json" },
+});
+
+// -------------------------------
+const INTEREST_BUFFER_KEY = "apnidisha_interest_buffer_v1";
+
+// -------------------------------
 const ModernCollegeDirectory = () => {
+  const location = useLocation();
+
   const [colleges, setColleges] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState({ state: '', type: '', course: '', rating: '' });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filters, setFilters] = useState({
+    state: "",
+    type: "",
+    course: "",
+    rating: "",
+  });
   const [showFilters, setShowFilters] = useState(false);
-  const [bookmarkedColleges, setBookmarkedColleges] = useState(new Set());
   const [totalResults, setTotalResults] = useState(0);
+  const [totalInterest, setTotalInterest] = useState(0);
 
-  const mockColleges = [
-    { _id: '1', name: 'Indian Institute of Technology Delhi', location: 'New Delhi, Delhi', type: 'Government', rating: 4.8, studentsCount: 8000, averageFee: 200000, image: 'https://s3.ap-southeast-1.amazonaws.com/images.deccanchronicle.com/dc-Cover-4vkidj5i781nec03lquou0o4t4-20230716003213.Medi.jpeg' },
-    { _id: '2', name: 'University of Delhi', location: 'Delhi, Delhi', type: 'Government', rating: 4.5, studentsCount: 50000, averageFee: 50000, image: 'https://akm-img-a-in.tosshub.com/sites/resources/campus/prod/img/newslisting/2024/6/delhiuniversity1640037951502.avif' },
-    { _id: '3', name: 'Birla Institue Of Technology', location: 'Pilani, Rajasthan', type: 'Private', rating: 4.6, studentsCount: 10000, averageFee: 300000, image: 'https://www.catalyser.in/public/img/blog/bitcblog1.jpg' },
-    { _id: '4', name: 'Vellore Institute of Technology', location: 'Vellore, Tamil Nadu', type: 'Private', rating: 4.4, studentsCount: 20000, averageFee: 250000, image: 'https://img.buzzfeed.com/buzzfeed-static/static/2018-01/17/7/enhanced/buzzfeed-prod-web-10/original-6813-1516191965-2.jpg?crop=672:336;57,112&downsize=1250:*' },
-    { _id: '5', name: 'Jawaharlal Nehru University', location: 'New Delhi, Delhi', type: 'Government', rating: 4.3, studentsCount: 15000, averageFee: 60000, image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSsn4pvVTXt6EtwaPhdIuJVtiEm-sm5sHIraA&s' },
-    { _id: '6', name: 'Manipal Institute of Technology', location: 'Manipal, Karnataka', type: 'Private', rating: 4.2, studentsCount: 12000, averageFee: 180000, image: 'https://www.manipal.edu/content/dam/manipal/mu/maheblr/mit/001.jpg' },
-    { _id: '7', name: 'Indian Institute of Science Bangalore', location: 'Bangalore, Karnataka', type: 'Government', rating: 4.9, studentsCount: 5000, averageFee: 220000, image: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQiEruxbXKNm6CiV-4pZryr7230BbDbn-THjA&s' },
-    { _id: '8', name: 'Symbiosis International University', location: 'Pune, Maharashtra', type: 'Private', rating: 4.1, studentsCount: 25000, averageFee: 200000, image: 'https://shikshahub.com/uploads/sliders/1580815569phpnXbPpu.png' }
-  ];
+  const isSyncingRef = useRef(false);
 
+  // -------------------------------
+  // BUFFER HELPERS
+  // -------------------------------
+  const readInterestBuffer = () => {
+    try {
+      const raw = localStorage.getItem(INTEREST_BUFFER_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      console.warn("Failed to read interest buffer:", e);
+      return {};
+    }
+  };
+
+  const writeInterestBuffer = (buffer) => {
+    try {
+      localStorage.setItem(INTEREST_BUFFER_KEY, JSON.stringify(buffer));
+    } catch (e) {
+      console.warn("Failed to write interest buffer:", e);
+    }
+  };
+
+  // Attempt to send buffer using sendBeacon, otherwise fallback to fetch keepalive
+  const sendBufferedInterest = (buffer) => {
+    if (!buffer || Object.keys(buffer).length === 0) return false;
+
+    const url = "http://127.0.0.1:5000/api/colleges/interest-batch";
+    const body = JSON.stringify({ interest: buffer });
+
+    // Try sendBeacon first (best for unload/route-leave)
+    if (navigator.sendBeacon) {
+      try {
+        const blob = new Blob([body], { type: "application/json" });
+        const ok = navigator.sendBeacon(url, blob);
+        console.log("sendBeacon result:", ok);
+        return ok;
+      } catch (e) {
+        console.warn("sendBeacon failed, falling back to fetch:", e);
+      }
+    }
+
+    // Fallback: fetch with keepalive (supported in modern browsers)
+    try {
+      // Use navigator.fetch if available to be explicit, otherwise global fetch
+      const fetchFn = (typeof navigator !== "undefined" && navigator.fetch) || fetch;
+      fetchFn(url, {
+        method: "POST",
+        body,
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        mode: "cors",
+      }).then(() => {
+        console.log("fetch keepalive sent");
+      }).catch((err) => {
+        console.warn("fetch keepalive error:", err);
+      });
+      return true;
+    } catch (e) {
+      console.warn("No sendBeacon/fetch keepalive available:", e);
+      return false;
+    }
+  };
+
+  // -------------------------------
+  // SYNC BUFFER (regular axios call)
+  // Called on mount to flush any previous buffer when page loads
+  // -------------------------------
+  const syncInterestBuffer = async () => {
+    if (isSyncingRef.current) return;
+    const buffer = readInterestBuffer();
+    if (!buffer || Object.keys(buffer).length === 0) return;
+
+    isSyncingRef.current = true;
+    try {
+      console.log("🔄 Syncing interest via axios (mount flush):", buffer);
+      await API.post("/colleges/interest-batch", { interest: buffer });
+      localStorage.removeItem(INTEREST_BUFFER_KEY);
+      console.log("✅ Interest flushed to server.");
+    } catch (err) {
+      console.error("Interest flush failed:", err);
+    }
+    isSyncingRef.current = false;
+  };
+
+  // -------------------------------
+  // FETCH COLLEGES (with search + filters)
+  // -------------------------------
   const fetchColleges = async (search = searchTerm, appliedFilters = filters) => {
-  try {
-    setLoading(true);
-    const params = { search, ...appliedFilters, limit: 50 };
-    Object.keys(params).forEach(key => !params[key] && delete params[key]);
+    try {
+      setLoading(true);
+      const params = { search, ...appliedFilters, limit: 50 };
+      Object.keys(params).forEach((k) => !params[k] && delete params[k]);
 
-    const response = await collegesAPI.getAll(params);
+      const res = await API.get("/colleges", { params });
+      const data = res.data?.data || res.data?.colleges || [];
 
-    setColleges(response.data.data || response.data.colleges || mockColleges);
-    setTotalResults(response.data.total || response.data.data?.length || mockColleges.length);
-  } catch (error) {
-    console.error('Error fetching colleges:', error);
-    // Remove toast.error
-    setColleges(mockColleges);
-    setTotalResults(mockColleges.length);
-  } finally {
-    setLoading(false);
-  }
-};
+      console.log("📥 DATA RECEIVED FROM BACKEND:", data);
 
+      const totalInt =
+        res.data?.totalInterest ?? data.reduce((sum, c) => sum + (c.interest || 0), 0);
 
-  const debouncedFetch = useRef(debounce((value) => fetchColleges(value, filters), 400)).current;
+      setColleges(data);
+      setTotalResults(res.data?.total || data.length);
+      setTotalInterest(totalInt);
+    } catch (err) {
+      console.error("Backend down, cannot fetch colleges.", err);
+      setColleges([]);
+      setTotalResults(0);
+      setTotalInterest(0);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const debouncedFetch = useRef(
+    debounce((value, currentFilters) => {
+      fetchColleges(value, currentFilters);
+    }, 400)
+  ).current;
+
+  // -------------------------------
+  // INIT (no periodic timer)
+  // - flush any buffer from previous sessions
+  // - load colleges
+  // -------------------------------
   useEffect(() => {
-    fetchColleges();
-    const token = localStorage.getItem('token');
-    if (token) fetchBookmarks();
+    (async () => {
+      await syncInterestBuffer();
+      await fetchColleges();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchBookmarks = async () => {
-    try {
-      const response = await bookmarksAPI.getAll();
-      const collegeBookmarks = response.data.bookmarks
-        ?.filter(b => b.type === 'college')
-        ?.map(b => b.itemId) || [];
-      setBookmarkedColleges(new Set(collegeBookmarks));
-    } catch {
-      setBookmarkedColleges(new Set());
-    }
+  // -------------------------------
+  // INTEREST CLICK
+  // Buffer click locally only (no UI counter change)
+  // -------------------------------
+  const handleViewDetails = (id) => {
+    const buffer = readInterestBuffer();
+    buffer[id] = (buffer[id] || 0) + 1;
+    writeInterestBuffer(buffer);
+    console.log("❤️ Stored interest in buffer:", buffer);
+
+    // You can navigate to details page here if desired
+    // navigate(`/colleges/${id}`)
   };
 
-  const handleBookmark = async (id) => {
-    try {
-      await bookmarksAPI.toggle('college', id);
-      setBookmarkedColleges(prev => {
-        const newSet = new Set(prev);
-        newSet.has(id) ? newSet.delete(id) : newSet.add(id);
-        return newSet;
-      });
-    } catch {
-      toast.error('Failed to update bookmark');
-    }
-  };
+  // -------------------------------
+  const computeInterestPercent = (val) =>
+    totalInterest > 0 ? `${Math.round((val / totalInterest) * 100)}%` : "0%";
 
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-    debouncedFetch(e.target.value);
-  };
+  // -------------------------------
+  // SYNC ON ROUTE CHANGE (user leaves the route)
+  // Use sendBeacon or fallback fetch keepalive
+  // -------------------------------
+  useEffect(() => {
+    return () => {
+      const buffer = readInterestBuffer();
+      if (buffer && Object.keys(buffer).length > 0) {
+        console.log("📤 Syncing via sendBeacon on route LEAVE:", buffer);
+        const sent = sendBufferedInterest(buffer);
+        if (sent) {
+          localStorage.removeItem(INTEREST_BUFFER_KEY);
+        } else {
+          console.warn("Buffered interest not sent on route leave; it will remain for next session.");
+        }
+      }
+    };
+  }, [location.pathname]);
 
-  const clearFilters = () => {
-    setFilters({ state: '', type: '', course: '', rating: '' });
-    setSearchTerm('');
-    fetchColleges();
-  };
+  // -------------------------------
+  // SYNC ON TAB CLOSE / REFRESH
+  // -------------------------------
+  useEffect(() => {
+    const handleUnload = (e) => {
+      const buffer = readInterestBuffer();
+      if (buffer && Object.keys(buffer).length > 0) {
+        console.log("📤 Syncing via sendBeacon on TAB CLOSE:", buffer);
+        const sent = sendBufferedInterest(buffer);
+        if (sent) {
+          localStorage.removeItem(INTEREST_BUFFER_KEY);
+        } else {
+          console.warn("Buffered interest not sent on unload; it will remain for next session.");
+        }
+      }
+      // no need to prevent unload; just attempt to send
+    };
 
-  const activeFiltersCount = Object.values(filters).filter(Boolean).length + (searchTerm ? 1 : 0);
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, []);
 
+  // -------------------------------
+  // UI
+  // -------------------------------
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
+      {/* HEADER */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-8 text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">College Directory</h1>
-          <p className="text-lg text-gray-600 mb-6">Discover and compare top colleges across India</p>
-          <div className="flex justify-center space-x-8 text-sm">
-            <div className="flex items-center"><GraduationCap className="h-5 w-5 mr-2 text-green-600" />100+ Programs</div>
-            <div className="flex items-center"><Award className="h-5 w-5 mr-2 text-purple-600" />Verified Reviews</div>
+          <h1 className="text-3xl font-bold">College Directory</h1>
+          <p className="text-gray-600">Discover top colleges across India</p>
+
+          <div className="flex justify-center gap-8 text-sm mt-4">
+            <div className="flex items-center">
+              <GraduationCap className="h-5 w-5 mr-2 text-green-600" />
+              100+ Programs
+            </div>
+            <div className="flex items-center">
+              <Award className="h-5 w-5 mr-2 text-purple-600" />
+              Verified Reviews
+            </div>
+          </div>
+
+          <div className="mt-2 text-xs text-gray-400">
+            Tracking interest across <span className="font-semibold">{totalResults}</span> colleges
           </div>
         </div>
       </div>
 
-      {/* Search + Filters */}
+      {/* SEARCH + FILTERS */}
       <div className="max-w-7xl mx-auto px-4 py-4">
         <Card className="border-0 shadow-lg mb-6">
           <CardContent className="p-7">
             <div className="flex flex-col lg:flex-row gap-4">
               <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <Input
-                  type="text"
                   placeholder="Search colleges..."
                   value={searchTerm}
-                  onChange={handleSearchChange}
-                  className="pl-10 h-12 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setSearchTerm(value);
+                    debouncedFetch(value, filters);
+                  }}
+                  className="pl-10 h-12"
                 />
               </div>
-              <Button variant="outline" onClick={() => setShowFilters(!showFilters)} className="flex items-center gap-2 h-12">
-                <SlidersHorizontal className="h-4 w-4" /> Filters
-                {activeFiltersCount > 0 && <Badge className="bg-blue-600 text-white ml-1">{activeFiltersCount}</Badge>}
+
+              <Button
+                variant="outline"
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 h-12"
+              >
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
               </Button>
             </div>
-            
+
+            {/* FILTER PANEL */}
             {showFilters && (
-              <div className="mt-6 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* State Filter */}
-                <Select 
-                  value={filters.state || "all"} 
-                  onValueChange={(v) => { 
-                    setFilters(prev => ({ ...prev, state: v === "all" ? "" : v })); 
-                    debouncedFetch(searchTerm); 
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6 pt-6 border-t">
+                {/* STATE */}
+                <Select
+                  value={filters.state || "all"}
+                  onValueChange={(v) => {
+                    const next = { ...filters, state: v === "all" ? "" : v };
+                    setFilters(next);
+                    debouncedFetch(searchTerm, next);
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Select State" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="State" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All States</SelectItem>
                     <SelectItem value="maharashtra">Maharashtra</SelectItem>
@@ -154,15 +335,18 @@ const ModernCollegeDirectory = () => {
                   </SelectContent>
                 </Select>
 
-                {/* College Type Filter */}
-                <Select 
-                  value={filters.type || "all"} 
-                  onValueChange={(v) => { 
-                    setFilters(prev => ({ ...prev, type: v === "all" ? "" : v })); 
-                    debouncedFetch(searchTerm); 
+                {/* TYPE */}
+                <Select
+                  value={filters.type || "all"}
+                  onValueChange={(v) => {
+                    const next = { ...filters, type: v === "all" ? "" : v };
+                    setFilters(next);
+                    debouncedFetch(searchTerm, next);
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="College Type" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="government">Government</SelectItem>
@@ -171,15 +355,18 @@ const ModernCollegeDirectory = () => {
                   </SelectContent>
                 </Select>
 
-                {/* Course Filter */}
-                <Select 
-                  value={filters.course || "all"} 
-                  onValueChange={(v) => { 
-                    setFilters(prev => ({ ...prev, course: v === "all" ? "" : v })); 
-                    debouncedFetch(searchTerm); 
+                {/* COURSE */}
+                <Select
+                  value={filters.course || "all"}
+                  onValueChange={(v) => {
+                    const next = { ...filters, course: v === "all" ? "" : v };
+                    setFilters(next);
+                    debouncedFetch(searchTerm, next);
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Course Type" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Course" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Courses</SelectItem>
                     <SelectItem value="engineering">Engineering</SelectItem>
@@ -189,79 +376,114 @@ const ModernCollegeDirectory = () => {
                   </SelectContent>
                 </Select>
 
-                {/* Rating Filter */}
-                <Select 
-                  value={filters.rating || "all"} 
-                  onValueChange={(v) => { 
-                    setFilters(prev => ({ ...prev, rating: v === "all" ? "" : v })); 
-                    debouncedFetch(searchTerm); 
+                {/* RATING */}
+                <Select
+                  value={filters.rating || "all"}
+                  onValueChange={(v) => {
+                    const next = { ...filters, rating: v === "all" ? "" : v };
+                    setFilters(next);
+                    debouncedFetch(searchTerm, next);
                   }}
                 >
-                  <SelectTrigger><SelectValue placeholder="Rating" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Rating" />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Any Rating</SelectItem>
+                    <SelectItem value="all">Any</SelectItem>
                     <SelectItem value="4">4+ Stars</SelectItem>
                     <SelectItem value="3">3+ Stars</SelectItem>
                     <SelectItem value="2">2+ Stars</SelectItem>
                   </SelectContent>
                 </Select>
 
-                {/* Clear Filters */}
-                {activeFiltersCount > 0 && (
-                  <div className="col-span-full flex justify-end mt-4">
-                    <Button variant="outline" onClick={clearFilters} className="text-gray-600">
-                      <X className="h-4 w-4 mr-2" /> Clear All Filters
-                    </Button>
-                  </div>
-                )}
+                {/* CLEAR FILTERS */}
+                <div className="col-span-full flex justify-end">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const reset = { state: "", type: "", course: "", rating: "" };
+                      setFilters(reset);
+                      setSearchTerm("");
+                      fetchColleges("", reset);
+                    }}
+                  >
+                    <X className="h-4 w-4 mr-2" /> Clear Filters
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
         </Card>
-        
-        {/* Colleges Grid */}
+
+        {/* GRID */}
         {loading ? (
           <div className="min-h-[200px] flex justify-center items-center">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mr-3" /> Loading colleges...
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {colleges.map(college => (
-              <Card key={college._id} className="border-0 shadow-md hover:shadow-xl transition-all overflow-hidden">
-                <div className="relative h-48 w-full overflow-hidden">
-                  <img src={college.image} alt={college.name} className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
-                  <div className="absolute top-4 right-4">
-                    <Button variant="ghost" size="sm" onClick={() => handleBookmark(college._id)} className="bg-white/90 hover:bg-white">
-                      <Heart className={`h-4 w-4 ${bookmarkedColleges.has(college._id) ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+            {colleges.map((college) => {
+              const val = college.interest || 0;
+              const pct = computeInterestPercent(val);
+
+              return (
+                <Card
+                  key={college._id}
+                  className="border-0 shadow-md hover:shadow-xl transition overflow-hidden"
+                >
+                  <div className="relative h-48">
+                    <img
+                      src={college.image || "https://via.placeholder.com/600x300?text=College"}
+                      alt={college.name}
+                      className="w-full h-full object-cover hover:scale-105 transition"
+                    />
+
+                    {/* INTEREST BADGE */}
+                    <div className="absolute top-4 left-4 bg-white/90 px-3 py-1 rounded-full flex items-center gap-2 text-xs">
+                      <Heart className="h-4 w-4 text-red-500" />
+                      <span>Interested</span>
+                      <Badge className="bg-blue-600 text-white text-[10px]">{pct}</Badge>
+                    </div>
+
+                    {college.type && (
+                      <div className="absolute bottom-4 left-4">
+                        <Badge className="bg-white/90 text-gray-900">{college.type}</Badge>
+                      </div>
+                    )}
+                  </div>
+
+                  <CardHeader className="pb-4">
+                    <CardTitle className="line-clamp-2">{college.name}</CardTitle>
+
+                    <div className="flex justify-end mt-2 text-sm">
+                      <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                      {college.rating ?? "-"}
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="text-sm text-gray-600 space-y-2">
+                    <div className="flex items-center">
+                      <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                      {college.location || college.city || "Location N/A"}
+                    </div>
+
+                    <div className="flex items-center">
+                      <Users className="h-4 w-4 mr-2 text-gray-400" />
+                      {college.studentsCount ? `${college.studentsCount} students` : "Students: N/A"}
+                    </div>
+
+                    <div className="flex items-center">
+                      <IndianRupee className="h-4 w-4 mr-2 text-gray-400" />
+                      ₹{college.averageFee ? college.averageFee.toLocaleString() : "0"} per year
+                    </div>
+
+                    <Button className="w-full bg-blue-600 hover:bg-blue-700 mt-3" onClick={() => handleViewDetails(college._id)}>
+                      View Details
                     </Button>
-                  </div>
-                  <div className="absolute bottom-4 left-4">
-                    <Badge className="bg-white/90 text-gray-900">{college.type}</Badge>
-                  </div>
-                </div>
-
-                <CardHeader className="pb-4 flex justify-between items-start">
-                  <CardTitle className="text-lg leading-tight line-clamp-2">{college.name}</CardTitle>
-                  <div className="flex items-center ml-2">
-                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                    <span className="text-sm font-medium">{college.rating}</span>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="pt-0 text-sm text-gray-600 space-y-2">
-                  <div className="flex items-center"><MapPin className="h-4 w-4 mr-2 text-gray-400" />{college.location}</div>
-                  <div className="flex items-center"><Users className="h-4 w-4 mr-2 text-gray-400" />{college.studentsCount} students</div>
-                  <div className="flex items-center"><IndianRupee className="h-4 w-4 mr-2 text-gray-400" />₹{college.averageFee.toLocaleString()} per year</div>
-                  <div className="flex gap-2 mt-2">
-                    {/* <Link to={`/colleges/${college._id}`} className="flex-1"> */}
-                      <Button className="w-full bg-blue-600 hover:bg-blue-700 mt-3">
-                        View Details
-                      </Button>
-                    {/* </Link> */}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
