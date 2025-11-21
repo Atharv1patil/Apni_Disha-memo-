@@ -21,6 +21,9 @@ import {
 } from "../../utils/careerStream";
 import FlowChart from "./flowchart"
 
+
+import exportSummary from "./exportSummary"
+
 /* -----------------------
    MAIN COMPONENT
    ----------------------- */
@@ -39,7 +42,6 @@ export default function SimulatorPage() {
   const [skills, setSkills] = useState(active.skills || [])
   const [upskill, setUpskill] = useState(active.upskill || [])
   const [scholarship, setScholarship] = useState(active.scholarship || "")
-  const [sensitivity, setSensitivity] = useState(0)
   const [playgroundMode, setPlaygroundMode] = useState(false)
   const [govtFirst, setGovtFirst] = useState(true)
   const [showFullChart, setShowFullChart] = useState(false);
@@ -247,72 +249,119 @@ export default function SimulatorPage() {
   }
 
   /* Export summary (unchanged, but robust) */
-  const exportSummary = () => {
-    const summary = scenarios
-      .map((s, i) => {
-        return `${t("scenario")} ${i + 1}:
-Name: ${s.name || `${t("scenario")} ${i + 1}`}
-Stream: ${getLabel(
-          STREAMS.find((st) => st.id === s.stream),
-          i18n.language,
-        )}
-Course: ${getLabel(
-          (COURSES[s.stream] || []).find((c) => c.id === s.course),
-          i18n.language,
-        )}
-College Type: ${getLabel(
-          COLLEGE_TYPES.find((ct) => ct.id === s.collegeType),
-          i18n.language,
-        )}
-College: ${getLabel(
-          (COLLEGES[s.collegeType] || []).find((cl) => cl.id === s.college),
-          i18n.language,
-        )}
-Skills: ${(s.skills || [])
-          .map((sk) =>
-            getLabel(
-              SKILLS.find((skl) => skl.id === sk),
-              i18n.language,
-            ),
-          )
-          .join(", ")}
-Upskill: ${(s.upskill || [])
-          .map((u) =>
-            getLabel(
-              UPSKILLS.find((up) => up.id === u),
-              i18n.language,
-            ),
-          )
-          .join(", ")}
-Scholarship: ${getLabel(
-          SCHOLARSHIPS.find((sch) => sch.id === s.scholarship),
-          i18n.language,
-        )}
-NPV: ${s.npv ? currency(s.npv) : "-"}
-ROI: ${s.roi ?? "-"}
-Employment Probability: ${s.employmentProb ? `${(s.employmentProb * 100).toFixed(1)}%` : "-"}
-Starting Salary: ${s.startingSalary ? currency(s.startingSalary) : "-"}
-Time to Job: ${s.timeToJob ?? "-"} ${t("months")}
-Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}%` : "-"}
-`
-      })
-      .join("\n\n---\n\n")
+//   const exportSummary = () => {
+//   try {
+//     const doc = new jsPDF({
+//       orientation: "portrait",
+//       unit: "pt",
+//       format: "A4",
+//     });
 
-    try {
-      const blob = new Blob([summary], { type: "text/plain;charset=utf-8" })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = "career_summary.txt"
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
-    } catch (err) {
-      console.warn("Export failed:", err)
+//     const colHeaders = [
+//       "Scenario",
+//       "Name",
+//       "Stream",
+//       "Course",
+//       "College Type",
+//       "College",
+//       "Skills",
+//       "Upskill",
+//       "Scholarship",
+//       "NPV",
+//       "ROI",
+//       "Employment Prob.",
+//       "Starting Salary",
+//       "Time to Job",
+//       "Scholarship Odds",
+//     ];
+
+//     const rows = scenarios.map((s, i) => [
+//       `${i + 1}`,
+//       s.name || `${t("scenario")} ${i + 1}`,
+//       getLabel(STREAMS.find((st) => st.id === s.stream), i18n.language) || "",
+//       getLabel(
+//         (COURSES[s.stream] || []).find((c) => c.id === s.course),
+//         i18n.language
+//       ) || "",
+//       getLabel(
+//         COLLEGE_TYPES.find((ct) => ct.id === s.collegeType),
+//         i18n.language
+//       ) || "",
+//       getLabel(
+//         (COLLEGES[s.collegeType] || []).find((cl) => cl.id === s.college),
+//         i18n.language
+//       ) || "",
+//       (s.skills || [])
+//         .map((sk) =>
+//           getLabel(SKILLS.find((skl) => skl.id === sk), i18n.language)
+//         )
+//         .join(", "),
+//       (s.upskill || [])
+//         .map((u) =>
+//           getLabel(UPSKILLS.find((up) => up.id === u), i18n.language)
+//         )
+//         .join(", "),
+//       getLabel(
+//         SCHOLARSHIPS.find((sch) => sch.id === s.scholarship),
+//         i18n.language
+//       ) || "",
+//       s.npv ? currency(s.npv) : "-",
+//       s.roi ?? "-",
+//       s.employmentProb ? `${(s.employmentProb * 100).toFixed(1)}%` : "-",
+//       s.startingSalary ? currency(s.startingSalary) : "-",
+//       s.timeToJob ? `${s.timeToJob} ${t("months")}` : "-",
+//       s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}%` : "-",
+//     ]);
+
+//     // Add title
+//     doc.setFontSize(18);
+//     doc.text("Career Analysis Report", 40, 40);
+
+//     // Line break
+//     doc.setFontSize(12);
+//     doc.text(
+//       `Generated on: ${new Date().toLocaleDateString()}`,
+//       40,
+//       60
+//     );
+
+//     autoTable(doc, {
+//   head: [colHeaders],
+//   body: rows,
+//   startY: 80,
+//   margin: { left: 40, right: 40 },
+//   styles: {
+//     fontSize: 8,
+//     cellPadding: 4,
+//   },
+//   headStyles: {
+//     fillColor: [56, 90, 190],
+//     textColor: 255,
+//   },
+//   alternateRowStyles: {
+//     fillColor: [240, 240, 240],
+//   },
+// });
+
+
+//     doc.save("career_summary.pdf");
+
+//   } catch (err) {
+//     console.warn("Export failed:", err);
+//   }
+// };
+
+// Dynamic perks for military.
+  const dynamicPerks = useMemo(() => {
+    const base = { ...PERKS };
+    if (stream === "public_service") {
+      base.jobSecurity.score = 10;
+      base.pension.coverage = "100%";
+      base.competition.ratio = "1:200"; // High entry, low turnover.
+      base.postings.variety = "Global Deployments";
     }
-  }
-
+    return base;
+  }, [stream]);
   /* Small helpers */
   const toggleSkill = (id) => setSkills((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   const toggleUpskill = (id) => setUpskill((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
@@ -391,17 +440,38 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
       return copy
     })
   }
-// Dynamic perks for military.
-  const dynamicPerks = useMemo(() => {
-    const base = { ...PERKS };
-    if (stream === "public_service") {
-      base.jobSecurity.score = 10;
-      base.pension.coverage = "100%";
-      base.competition.ratio = "1:200"; // High entry, low turnover.
-      base.postings.variety = "Global Deployments";
-    }
-    return base;
-  }, [stream]);
+  {showFullChart && (
+  <div className="fixed inset-0 bg-white z-[9999] flex flex-col">
+    
+    {/* Top Bar */}
+    <div className="w-full p-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white flex justify-between items-center shadow-lg">
+      <h2 className="text-lg font-semibold">
+        Full Screen Career Flowchart
+      </h2>
+
+      <button
+        onClick={() => setShowFullChart(false)}
+        className="px-4 py-2 bg-white/20 rounded-md hover:bg-white/30 transition flex items-center gap-2"
+      >
+        <span>Close</span>
+      </button>
+    </div>
+
+    {/* Full Screen Chart Container */}
+    <div className="flex-1 relative overflow-hidden">
+      <FlowChart
+        active={active}
+        getLabel={getLabel}
+        lang={i18n.language}
+        t={t}
+        dynamicPerks={dynamicPerks}
+        fullscreen
+      />
+    </div>
+  </div>
+)}
+
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-indigo-50 via-white to-indigo-100 text-gray-900 font-sans selection:bg-indigo-300 selection:text-white">
       {/* HERO */}
@@ -594,7 +664,22 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
             >
               Save
             </button>
-            <button onClick={exportSummary} className="px-4 py-2 bg-indigo-50 rounded-full">
+            <button onClick={() =>
+    exportSummary({
+      scenarios,
+      STREAMS,
+      COURSES,
+      COLLEGE_TYPES,
+      COLLEGES,
+      SKILLS,
+      UPSKILLS,
+      SCHOLARSHIPS,
+      t,
+      i18n,
+      currency,
+      getLabel,
+    })
+  } className="px-4 py-2 bg-indigo-50 rounded-full">
               Export
             </button>
           </div>
@@ -624,6 +709,128 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
                   value={`${((active?.employmentProb || 0) * 100).toFixed(0)}%`}
                 />
               </div>
+{showFullChart && (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-[9999] animate-fadeIn">
+    {/* Overlay with subtle gradient for depth */}
+    <div className="absolute inset-0 bg-gradient-to-br from-indigo-900/20 via-purple-900/20 to-blue-900/20"></div>
+    
+    <div className="relative bg-white/95 backdrop-blur-lg w-[98vw] h-[98vh] max-w-[2000px] max-h-[98vh] rounded-2xl shadow-2xl border border-white/20 flex flex-col overflow-hidden animate-slideUp">
+      
+      {/* Enhanced Top Bar: Glassmorphism + Icons + Search */}
+      <div className="flex items-center justify-between px-6 py-4 bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-10">
+        <div className="flex items-center space-x-4">
+          <div className="p-2 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-xl text-white">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <div>
+            <h2 className="font-bold text-2xl text-gray-800">Career Flowchart Explorer</h2>
+            <p className="text-sm text-gray-600">Navigate your future paths interactively</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center space-x-3">
+          {/* Optional Search Input */}
+          <div className="relative hidden md:block">
+            <input
+              type="text"
+              placeholder="Search careers..."
+              className="pl-10 pr-4 py-2 bg-white/80 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm w-64"
+            />
+            <svg className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          
+          {/* Tools */}
+          <button className="p-2 text-gray-600 hover:text-indigo-600 transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+            </svg>
+          </button>
+          
+          {/* Fullscreen Toggle (if nested) */}
+          <button className="p-2 text-gray-600 hover:text-indigo-600 transition">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+            </svg>
+          </button>
+          
+          {/* Close Button */}
+          <button
+            onClick={() => setShowFullChart(false)}
+            className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition backdrop-blur-sm"
+            aria-label="Close dialog"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Enhanced Content Area: Full bleed with subtle padding */}
+      <div className="flex-1 relative overflow-hidden bg-gradient-to-br from-gray-50 via-white to-indigo-50">
+        {/* Optional Sidebar for Filters/Legend (Collapsible) */}
+        <div className="absolute left-0 top-0 h-full w-64 bg-white/80 backdrop-blur-sm border-r border-gray-200 transform translate-x-0 transition-transform duration-300 md:translate-x-0 z-20">
+          <div className="p-6 space-y-4">
+            <h3 className="font-semibold text-gray-800">Stream Filters</h3>
+            <div className="space-y-2">
+              {['Science', 'Commerce', 'Arts', 'Vocational', 'New-Age'].map((stream) => (
+                <label key={stream} className="flex items-center space-x-2 cursor-pointer">
+                  <input type="checkbox" className="rounded" defaultChecked />
+                  <span className="text-sm text-gray-700">{stream}</span>
+                </label>
+              ))}
+            </div>
+            <button className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">
+              Apply Filters
+            </button>
+          </div>
+        </div>
+
+        {/* FlowChart with Zero Padding in Fullscreen */}
+        <div className="absolute inset-0 md:left-64"> {/* Offset for sidebar */}
+          <FlowChart
+            isFullScreen={true}
+            onCloseFullScreen={() => setShowFullChart(false)}
+            active={active}
+            getLabel={getLabel}
+            lang={i18n.language}
+            t={t}
+            dynamicPerks={dynamicPerks}
+          />
+        </div>
+      </div>
+
+      {/* Bottom Bar: Legend/Key + Export */}
+      <div className="flex items-center justify-between px-6 py-3 bg-white/10 backdrop-blur-md border-t border-white/20">
+        <div className="flex items-center space-x-4 text-sm text-gray-600">
+          <div className="flex items-center space-x-1">
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span>Science</span>
+          </div>
+          <div className="flex items-center space-x-1">
+            <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+            <span>Commerce</span>
+          </div>
+          {/* Add more legend items as needed */}
+        </div>
+        
+        <div className="flex items-center space-x-2">
+          <button className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition text-sm">
+            Export PNG
+          </button>
+          <button className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white transition text-sm">
+            Share
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
 
               {/* Flowchart Visualization Area - LARGE SPACE */}
               <div className="relative bg-gradient-to-br from-slate-50/70 via-white/90 to-indigo-50/30 rounded-xl p-6 lg:p-8 border border-indigo-100/40 shadow-inner lg:shadow-md min-h-[400px] lg:min-h-[450px] xl:min-h-[500px] flex items-center justify-center overflow-hidden">
@@ -644,7 +851,7 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
           </div>
 
               {/* Key Metrics Cards */}
-              <div className="space-y-3 mb-8">
+              <div className="space-y-3 mb-8 mt-4">
                 <div className="rounded-xl p-4 border border-gray-200 bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div>
@@ -672,7 +879,7 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
                 </div>
               </div>
 
-              {/* Sensitivity Lens Slider */}
+              {/* Sensitivity Lens Slider
               <div className="mb-8">
                 <label className="block mb-3 font-semibold text-gray-700">Sensitivity Lens</label>
                 <input
@@ -685,15 +892,16 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
                   className="w-full h-2 rounded-lg accent-blue-600"
                   aria-label="Sensitivity Lens"
                 />
-              </div>
+              </div> */}
 
               {/* Narration Control Section */}
               <div className="space-y-3 mb-8">
                 <div className="flex gap-3">
                   <button
                     onClick={() => playTts(generateNarrative(active, i18n.language))}
-                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2"
+                    className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2"
                   >
+                    {/* p-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg hover:scale-105 transition */}
                     <Volume2 className="w-4 h-4" />
                     Play Narration
                   </button>
@@ -717,8 +925,23 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
 
                 {/* Export Section */}
                 <button
-                  onClick={exportSummary}
-                  className="w-full border-2 border-blue-600 text-blue-600 py-3 rounded-lg hover:bg-blue-50 transition font-semibold flex items-center justify-center gap-2"
+                  onClick={() =>
+    exportSummary({
+      scenarios,
+      STREAMS,
+      COURSES,
+      COLLEGE_TYPES,
+      COLLEGES,
+      SKILLS,
+      UPSKILLS,
+      SCHOLARSHIPS,
+      t,
+      i18n,
+      currency,
+      getLabel,
+    })
+  }
+                  className="w-full border-2 border-blue-600 text-purple-600 py-3 rounded-lg hover:bg-blue-50 transition font-semibold flex items-center justify-center gap-2"
                 >
                   <Download className="w-4 h-4" />
                   Export Summary
@@ -771,7 +994,7 @@ Scholarship Odds: ${s.scholarshipOdds ? `${(s.scholarshipOdds * 100).toFixed(1)}
             <div className="mt-6 flex gap-3">
               <button
                 onClick={() => alert("Share to parents (mock)")}
-                className="flex-1 bg-gradient-to-r from-pink-500 to-yellow-400 text-white py-2 rounded-xl"
+                className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-2 rounded-xl"
               >
                 {" "}
                 {t("share")}

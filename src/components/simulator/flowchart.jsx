@@ -604,9 +604,10 @@ const toggleCollapse = useCallback((nodeId) => {
   // ============================
   return (
     <div
-      className={`w-full ${isFullScreen ? "h-screen" : "h-96"
-        } bg-gradient-to-b from-indigo-50 to-indigo-100 rounded-2xl shadow-inner overflow-hidden relative`}
-    >
+  className={`w-full ${isFullScreen ? "h-full" : "h-96"} 
+    bg-gradient-to-b from-indigo-50 to-indigo-100 rounded-2xl shadow-inner overflow-hidden relative`}
+ 
+>
       {isFullScreen && (
         <button
           onClick={onCloseFullScreen}
@@ -616,40 +617,41 @@ const toggleCollapse = useCallback((nodeId) => {
         </button>
       )}
 
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        nodesDraggable={true}
-        nodesConnectable={false}
-        elementsSelectable={true}
-        onNodesChange={onNodesChange}
-        onNodeClick={(evt, node) => {
-  toggleCollapse(node.id);
-}}
-edgesFocusable={true}
-        onNodeDrag={onNodeDrag}
-        onNodeDragStart={onNodeDragStart}
-        panOnDrag
-        zoomOnScroll
-        zoomOnDoubleClick={false}
-        fitView
-        fitViewOptions={{
-          padding: isFullScreen ? 0.05 : 0.1,
-          duration: 600,
-        }}
-      >
-        {isFullScreen ? (
-          <>
-            <Controls className="bg-white rounded shadow-lg" />
-            <MiniMap className="bg-white border-2 border-indigo-200" zoomable pannable />
-          </>
-        ) : (
-          <Background variant="dots" gap={16} size={0.8} color="#c7d2fe" />
-        )}
+      <div className="w-full h-full">
+  <ReactFlow
+    style={{ width: "100%", height: "100%" }}
+    nodes={nodes}
+    edges={edges}
+    nodeTypes={nodeTypes}
+    nodesDraggable
+    nodesConnectable={false}
+    elementsSelectable
+    onNodesChange={onNodesChange}
+    onNodeClick={(evt, node) => toggleCollapse(node.id)}
+    edgesFocusable
+    onNodeDrag={onNodeDrag}
+    onNodeDragStart={onNodeDragStart}
+    panOnDrag
+    zoomOnScroll
+    zoomOnDoubleClick={false}
+    fitView
+    fitViewOptions={{
+      padding: isFullScreen ? 0.05 : 0.1,
+      duration: 600,
+    }}
+  >
+    {isFullScreen ? (
+      <>
+        <Controls className="bg-white rounded shadow-lg" />
+        <MiniMap className="bg-white border-2 border-indigo-200" zoomable pannable />
+      </>
+    ) : (
+      <Background variant="dots" gap={16} size={0.8} color="#c7d2fe" />
+    )}
 
-        {isFullScreen && <Background variant="dots" gap={20} size={1} />}
-      </ReactFlow>
+    {isFullScreen && <Background variant="dots" gap={20} size={1} />}
+  </ReactFlow>
+</div>
     </div>
   );
 }
